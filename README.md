@@ -1,2 +1,0 @@
-# Bidhanlauncher
-Bidhanlauncher

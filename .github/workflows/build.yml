@@ -21,22 +21,34 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Extract Zip File
-        run: |
-          unzip -o *.zip
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Debug APK
+      - name: Auto Extract Zip if exists
         run: |
-          # gradlew ফাইলটি যেখানেই থাকুক খুঁজে বের করবে
+          ZIP_FILE=$(find . -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            unzip -o "$ZIP_FILE" -d extracted_app
+          fi
+
+      - name: Build APK with Gradle
+        run: |
+          # gradlew ফাইল থাকলে সেটা দিয়ে বিল্ড করবে, না থাকলে সিস্টেমে ইনস্টল করা gradle দিয়ে বিল্ড করবে
           GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
           if [ -n "$GRADLEW_PATH" ]; then
-            DIR=$(dirname "$GRADLEW_PATH")
-            cd "$DIR"
+            cd $(dirname "$GRADLEW_PATH")
             chmod +x gradlew
             ./gradlew assembleDebug
           else
-            echo "gradlew ফাইল পাওয়া যায়নি!"
-            exit 1
+            # gradlew ফাইল না থাকলেও প্রজেক্ট ফোল্ডারে ঢুকে সরাসরি gradle দিয়ে বিল্ড করবে
+            BUILD_FILE=$(find . -name "build.gradle*" | head -n 1)
+            if [ -n "$BUILD_FILE" ]; then
+              cd $(dirname "$BUILD_FILE")
+              gradle assembleDebug
+            else
+              echo "No build.gradle file found!"
+              exit 1
+            fi
           fi
 
       - name: Upload APK Artifact

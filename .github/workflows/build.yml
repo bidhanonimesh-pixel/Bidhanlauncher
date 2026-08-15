@@ -22,37 +22,43 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
 
-      - name: Auto Extract Zip if exists
+      - name: Extract Zip File
         run: |
-          ZIP_FILE=$(find . -name "*.zip" | head -n 1)
+          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
             unzip -o "$ZIP_FILE" -d extracted_app
           fi
 
-      - name: Build APK with Gradle
+      - name: Fix Compose Compiler & Build APK
         run: |
-          # gradlew ফাইল থাকলে সেটা দিয়ে বিল্ড করবে, না থাকলে সিস্টেমে ইনস্টল করা gradle দিয়ে বিল্ড করবে
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-          if [ -n "$GRADLEW_PATH" ]; then
-            cd $(dirname "$GRADLEW_PATH")
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            # gradlew ফাইল না থাকলেও প্রজেক্ট ফোল্ডারে ঢুকে সরাসরি gradle দিয়ে বিল্ড করবে
-            BUILD_FILE=$(find . -name "build.gradle*" | head -n 1)
-            if [ -n "$BUILD_FILE" ]; then
-              cd $(dirname "$BUILD_FILE")
-              gradle assembleDebug
-            else
-              echo "No build.gradle file found!"
-              exit 1
+          PROJ_DIR=$(find . -name "build.gradle.kts" | grep -v "/app/" | head -n 1)
+          if [ -n "$PROJ_DIR" ]; then
+            cd $(dirname "$PROJ_DIR")
+            
+            # Compose Compiler প্লাগইন স্বয়ংক্রিয়ভাবে যুক্ত করা
+            if [ -f "app/build.gradle.kts" ]; then
+              if ! grep -q "org.jetbrains.kotlin.plugin.compose" app/build.gradle.kts; then
+                sed -i 's/plugins {/plugins {\n    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"/' app/build.gradle.kts
+              fi
             fi
+
+            chmod +x gradlew || true
+            if [ -f "./gradlew" ]; then
+              ./gradlew assembleDebug --no-daemon
+            else
+              gradle assembleDebug --no-daemon
+            fi
+          else
+            echo "build.gradle.kts পাওয়া যায়নি!"
+            exit 1
           fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: bidhan-launcher-debug
           path: '**/build/outputs/apk/debug/*.apk'
